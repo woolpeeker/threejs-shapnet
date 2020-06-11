@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>three.js webgl - OBJLoader2 basic usage</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        #content {
+            width: 100%;
+            height: 100vh;
+            min-width: 640px;
+            min-height: 360px;
+            position: relative;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        #example {
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background-color: #000000;
+        }
+
+        #feedback {
+            color: darkorange;
+        }
+
+        #dat {
+            user-select: none;
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-Index: 200;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="content">
+        <canvas id="canvas"></canvas>
+    </div>
+    <div id="dat">
+
+    </div>
+    <div id="info">
+        <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - ScreenShot test
+        <div id="feedback"></div>
+    </div>
+
+    <script type="module">
+        function getQueryString() {
+            var qs = location.search.substr(1), // 获取url中"?"符后的字串  
+                args = {}, // 保存参数数据的对象
+                items = qs.length ? qs.split("&") : [], // 取得每一个参数项,
+                item = null,
+                len = items.length;
+
+            for (var i = 0; i < len; i++) {
+                item = items[i].split("=");
+                var name = decodeURIComponent(item[0]),
+                    value = decodeURIComponent(item[1]);
+                if (name) {
+                    args[name] = value;
+                }
+            }
+            return args;
+        }
+        var query_dict = getQueryString()
+        var OBJ_FILE_PREFIX = query_dict['token'];
+        import * as THREE from './node_modules/three/build/three.module.js';
+        import { TrackballControls } from "./node_modules/three/examples/jsm/controls/TrackballControls.js";
+        import { MTLLoader } from "./node_modules/three/examples/jsm/loaders/MTLLoader.js";
+        import { OBJLoader2 } from "./node_modules/three/examples/jsm/loaders/OBJLoader2.js";
+        import { MtlObjBridge } from "./node_modules/three/examples/jsm/loaders/obj2/bridge/MtlObjBridge.js";
+        import { OrbitControls } from "./node_modules/three/examples/jsm/controls/OrbitControls.js";
+        // Canvas size
+        var HEIGHT = 480;
+        var WIDTH = 480;
+        var div_content = document.getElementById('content');
+        div_content.style.width = WIDTH;
+        div_content.style.height = HEIGHT;
+
+        // renderer
+        let canvas = document.getElementById('canvas');
+        var renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: true,
+            preserveDrawingBuffer: true
+        });
+        renderer.setSize(WIDTH, HEIGHT, false);
+        renderer.setClearColor(0x000000);
+        // scene
+        var scene = new THREE.Scene();
+        // camera
+        var cameraDefaults = {
+            posCamera: new THREE.Vector3(0.0, 2.0, 2.0),
+            posCameraTarget: new THREE.Vector3(0, 0, 0),
+            near: 0.1,
+            far: 10000,
+            fov: 30
+        };
+        var camera = new THREE.PerspectiveCamera(
+            cameraDefaults.fov,
+            1,
+            cameraDefaults.near,
+            cameraDefaults.far
+        );
+        camera.position.copy(cameraDefaults.posCamera);
+        camera.aspect = WIDTH / HEIGHT;
+        camera.lookAt(cameraDefaults.posCameraTarget);
+        camera.updateProjectionMatrix();
+        var camera_phi_arr = [0, 45, 90, 135];
+        var camera_theta_arr = [75, 60, 45];
+        var camera_pos_num = camera_theta_arr.length * camera_phi_arr.length;
+        var controls = new OrbitControls(camera, renderer.domElement);
+        function set_camera(bbox, phi, theta) {
+            let cx = (bbox.min.x + bbox.max.x) / 2;
+            let cy = (bbox.min.y + bbox.max.y) / 2;
+            let cz = (bbox.min.z + bbox.max.z) / 2;
+            let box_len = Math.max(
+                bbox.max.x - bbox.min.x,
+                bbox.max.y - bbox.min.y,
+                bbox.max.z - bbox.min.z
+            )
+            let radium = 2;
+            phi = phi * Math.PI / 180;
+            theta = theta * Math.PI / 180;
+            let dx = radium * Math.sin(theta) * Math.cos(phi);
+            let dz = radium * Math.sin(theta) * Math.sin(phi);
+            let dy = radium * Math.cos(theta);
+            let cam_pos = new THREE.Vector3(cx+dx, cy+dy, cz+dz);
+            camera.position.copy(cam_pos);
+            controls.target = new THREE.Vector3(cx, cy, cz);
+            controls.update();
+        };
+        // add light and grid
+        let ambientLight = new THREE.AmbientLight(0x404040);
+        let directionalLight1 = new THREE.DirectionalLight(0xC0C090);
+        let directionalLight2 = new THREE.DirectionalLight(0xC0C090);
+        directionalLight1.position.set(- 100, - 50, 100);
+        directionalLight2.position.set(100, 50, - 100);
+        scene.add(directionalLight1);
+        scene.add(directionalLight2);
+        scene.add(ambientLight);
+        // let gridHelper = new THREE.GridHelper(100, 1000, 0xFF4444, 0x404040);
+        // scene.add(gridHelper);
+        let axesHelper = new THREE.AxesHelper(2);
+        scene.add(axesHelper);
+
+        // load .obj and .mtl
+        let objLoader2 = new OBJLoader2();
+        let callbackOnLoad = function (object3d) {
+            for (let i = 0; i < object3d.children.length; i++) {
+                let child = object3d.children[i]
+                try {
+                    let geometry = new THREE.Geometry().fromBufferGeometry(object3d.children[i].geometry);
+                    if (geometry.vertices.length == 12 && child.material.map) {
+                        child.material.polygonOffset = true;
+                        child.material.polygonOffsetFactor = -1.0;
+                        child.material.polygonOffsetUnits = -4.0;
+                    }
+                } catch (err) { }
+            }
+            scene.add(object3d);
+            console.log('Loading complete: ' + OBJ_FILE_PREFIX);
+        };
+        let onLoadMtl = function (mtlParseResult) {
+            objLoader2.setModelName(OBJ_FILE_PREFIX);
+            objLoader2.setLogging(true, true);
+            let materials = MtlObjBridge.addMaterialsFromMtlLoader(mtlParseResult);
+            objLoader2.addMaterials(materials, true);
+            objLoader2.load(OBJ_FILE_PREFIX + '.obj', callbackOnLoad, null, null, null);
+        };
+        let mtlLoader = new MTLLoader();
+        mtlLoader.load(OBJ_FILE_PREFIX + '.mtl', onLoadMtl);
+
+        // rendering
+        var shot_count = 0;
+        var metadata = {};
+        renderer.setAnimationLoop(function () {
+            for (let idx in scene.children) {
+                if (scene.children[idx].type == "Object3D") {
+                    let phi_idx = shot_count % camera_phi_arr.length;
+                    let theta_idx = Math.floor(shot_count / camera_phi_arr.length);
+                    let bbox = new THREE.Box3().setFromObject(scene.children[idx]);
+                    set_camera(bbox, camera_phi_arr[phi_idx], camera_theta_arr[theta_idx]);
+                    renderer.render(scene, camera);
+                    let imgName = `screenshot-${shot_count}.png`
+                    metadata[imgName] = {
+                        'camera': {
+                            'position': {
+                                'x': camera.position.x,
+                                'y': camera.position.y,
+                                'z': camera.position.z,
+                            },
+                            'quaternion': {
+                                'x': camera.quaternion._x,
+                                'y': camera.quaternion._y,
+                                'z': camera.quaternion._z,
+                                'w': camera.quaternion._w
+                            },
+                            'fov': camera.fov,
+                        }
+                    };
+                    if (shot_count < camera_pos_num) {
+                        save_image(imgName);
+                        shot_count++;
+                    } else if (shot_count == camera_pos_num) {
+                        save_metadata(JSON.stringify(metadata), 'metadata.json');
+                        shot_count++;
+                        let flagDiv = document.createElement("div");
+                        flagDiv.id = 'finished';
+                        document.body.appendChild(flagDiv);
+                    }
+                }
+            }
+        })
+        function save_metadata(content, fileName) {
+            let contentType = 'text/plain';
+            var a = document.createElement("a");
+            var file = new Blob([content], { type: contentType });
+            a.href = URL.createObjectURL(file);
+            a.download = fileName;
+            a.click();
+        }
+        function save_image(filename) {
+            var imgData, imgNode;
+            let strDownloadMime = "image/octet-stream";
+            try {
+                var strMime = "image/png";
+                imgData = renderer.domElement.toDataURL(strMime);
+                download_data(imgData.replace(strMime, strDownloadMime), filename);
+            } catch (e) {
+                console.log(e);
+            }
+        }
+        function download_data(strData, filename) {
+            var link = document.createElement('a');
+            if (typeof link.download === 'string') {
+                document.body.appendChild(link); //Firefox requires the link to be in the body
+                link.download = filename;
+                link.href = strData;
+                link.click();
+                document.body.removeChild(link); //remove the link when done
+            } else {
+                location.replace(uri);
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
