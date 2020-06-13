@@ -2,13 +2,15 @@
 
 const fs = require('fs');
 const puppeteer = require('puppeteer');
-const path = require('path')
+const path = require('path');
+const { SSL_OP_EPHEMERAL_RSA } = require('constants');
 
 
 var CATEGORIES = ['02691156'];
 var shapenetRoot = 'ShapeNetCore.v2'
 // var shapenetMeta = 'ShapeNetDemo.json';
 var shapenetMeta = 'ShapeNetCore.v2.json';
+// var shapenetMeta = 'omit.json';
 var outRoot = 'output';
 
 
@@ -28,7 +30,7 @@ async function work_fn(){
             await render_model(browser, token, outpath);
         }
     }
-    // await browser.close();
+    await browser.close();
 }
 
 async function render_model(browser, token, out_dir) {
@@ -36,6 +38,7 @@ async function render_model(browser, token, out_dir) {
     await page._client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: out_dir });
     await page.goto(`http://127.0.0.1:8000/screenshot.html?token=${token}`);
     await page.waitFor('#finished');
+    sleep(1000);
     await page.close();
 }
 
@@ -46,6 +49,16 @@ function mkdirsSync(dirname) {
         if (mkdirsSync(path.dirname(dirname))) {
             fs.mkdirSync(dirname);
             return true;
+        }
+    }
+}
+
+function sleep(msec){
+    let tic = new Date().getTime();
+    while(true){
+        let toc = new Date().getTime();
+        if ( toc-tic >= msec){
+            break;
         }
     }
 }

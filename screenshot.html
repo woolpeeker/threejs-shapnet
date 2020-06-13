@@ -147,8 +147,8 @@
         scene.add(ambientLight);
         // let gridHelper = new THREE.GridHelper(100, 1000, 0xFF4444, 0x404040);
         // scene.add(gridHelper);
-        let axesHelper = new THREE.AxesHelper(2);
-        scene.add(axesHelper);
+        // let axesHelper = new THREE.AxesHelper(2);
+        // scene.add(axesHelper);
 
         // load .obj and .mtl
         let objLoader2 = new OBJLoader2();
@@ -224,6 +224,7 @@
             var file = new Blob([content], { type: contentType });
             a.href = URL.createObjectURL(file);
             a.download = fileName;
+            sleep(120); // sleep to prevent from chrome download limit
             a.click();
         }
         function save_image(filename) {
@@ -243,10 +244,21 @@
                 document.body.appendChild(link); //Firefox requires the link to be in the body
                 link.download = filename;
                 link.href = strData;
+                sleep(120);
                 link.click();
                 document.body.removeChild(link); //remove the link when done
             } else {
                 location.replace(uri);
+            }
+        }
+
+        function sleep(msec){
+            let tic = new Date().getTime();
+            while(true){
+                let toc = new Date().getTime();
+                if ( toc-tic >= msec){
+                    break;
+                }
             }
         }
 
